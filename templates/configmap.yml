@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name | lower }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+ armory-agent.yml: |      
+{{- $config:= mergeOverwrite (fromYaml (.Values.agentyml | default "")) .Values.config }}
+{{- with $config }}
+  {{- if .hub }}
+    hub:
+{{ .hub | toYaml | indent 5}}    
+  {{- else }}
+    clouddriver:
+{{ toYaml ( required "you must at least set 'clouddriver' values  if 'hub' is not present. e.g. --set config.clouddriver.grpc=localhost:9091" .clouddriver  )| indent 5 }}
+  {{- end }}
+    {{- with .kubernetes }}
+    kubernetes:
+    {{- if .retries }}
+      retries:
+        enabled: {{ .retries.enabled | default true }}
+        {{- if .retries.enabled }}
+        maxRetries: {{ .retries.maxRetries | default 3 }}
+        backOffMs: {{ .retries.backOffMs | default 3000 }}
+        retryAnyError: {{ .retries.retryAnyError | default false }}
+        {{- if not .retries.retryAnyError }}
+        retryableErrors: {{ range .retries.retryableErrors }}
+          - {{. | quote }}{{- end }}
+        {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- if .noProxy }}
+      noProxy: {{ .noProxy }}
+      {{- end }}
+      reconnectTimeoutMs: {{ .reconnectTimeoutMs | default 5000 }}
+      accounts:      
+      {{- range $index, $account := .accounts }}      
+      - name: {{ required "each account must have a 'name' attribute" $account.name }}
+        {{- range $key, $val := $account -}}
+        {{- if not (or (eq $key "serviceAccount") (eq $key "kubeconfigFile")) }}        
+        {{- if and (eq $key "namespaces") $account.onlyNamespacedResources }}
+        namespaces: {{ $account.namespaces }}
+        {{- else if (eq $key "customResourceDefinitions") }}
+        customResourceDefinitions:
+        {{- range $in, $crd := $account.customResourceDefinitions }}
+        - kind: {{ $crd.kind }}
+        {{- end }}
+        {{- else if not (eq $key "name")}}
+        {{ $key }}: {{ $val }}
+        {{- end -}}
+        {{- end -}}
+      {{- end }}
+        serviceAccount: {{ hasKey $account "serviceAccount" | ternary $account.serviceAccount true }}
+        {{- if eq "false" ($account.serviceAccount | toString) }}
+        {{ coalesce (printf "# maps to %s-secret"  ($.Release.Name | lower) ) (required ".kubeconfigs is needed when serviceAccount: false: set it with --set kubeconfig=$HOME/.kube/config" $.Values.kubeconfigs) }}
+        kubeconfigFile: /kubeconfigfiles/{{ required "missing 'file' attribute in value under kubeconfigs, e.g. --set kubeconfigs.account1.file=config" (get $.Values.kubeconfigs $account.name).file }}
+        {{- end }}
+      {{- end -}}
+    {{- end }}
+    {{- if .logging }}
+    logging:
+{{ toYaml .logging | indent 5 }}
+    {{- end }}
+    {{- if .pprof }}
+    pprof:
+      enabled: {{ .pprof.enabled | default false }}
+      port: {{ .pprof.port | default 6060 }}
+    {{- end }}
+    {{- if .prometheus }}
+    prometheus:
+{{ toYaml .prometheus | indent 5 }}
+    {{- end }}
+    {{- if .server }}
+    server:
+{{ toYaml .server | indent 5 }}
+    {{- end }}
+    {{- if .secrets }}
+    secrets:
+{{ toYaml .secrets | indent 5 }}
+    {{- end -}}
+    {{- if .tasks }}
+{{ toYaml .tasks | indent 5 }}
+    {{- end }}
+    {{- if .timeoutSeconds }}
+    timeoutSeconds: {{ .timeoutSeconds }}
+    {{- end }}
+  {{- end -}}

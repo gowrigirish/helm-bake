@@ -1,0 +1,82 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ .Release.Name | lower }}
+    app.kubernetes.io/name: armory-agent
+  name: {{ .Release.Name | lower }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name | lower }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name | lower }}
+        app.kubernetes.io/name: armory-agent
+    spec:
+      serviceAccount: {{ .Release.Name | lower }}-sa
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      - name: {{ .Values.image.imagePullSecrets }}
+      {{- end }}
+      containers:
+      - image: {{ .Values.image.repository }}:{{ .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+        name: agent
+        env:
+        {{- $config:= mergeOverwrite (fromYaml (.Values.agentyml | default "")) .Values.config }}
+        {{- if not ($config.clouddriver | default dict).grpc }}
+        - name: ARMORY_HUB
+          value: "true"
+        {{- end }}
+        {{- with .Values.env }}
+        {{- /* Unfortunately this loop can't validate that the map has a name
+               and value structure. If name or value is mispelled, then it will
+               fail silently and create an invalid env structure.
+           */}}
+        {{- range . }}
+        - name: {{ index . "name" }}
+          value: {{ index . "value" }}
+        {{- end }}
+        {{- end }}
+        ports:
+          - name: health
+            containerPort: 8082
+            protocol: TCP
+          - name: metrics
+            containerPort: 8008
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            port: health
+            path: /health
+          failureThreshold: 3
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /opt/armory/config
+          name: volume-{{ .Release.Name | lower }}-config
+        {{- if .Values.kubeconfigs }}
+        - mountPath: /kubeconfigfiles
+          name: volume-{{ .Release.Name | lower }}-kubeconfigs
+        {{- end}}
+      restartPolicy: Always
+      volumes:
+      - name: volume-{{ .Release.Name | lower }}-config
+        configMap:
+          name: {{ .Release.Name | lower }}-config
+      {{- if .Values.kubeconfigs }}
+      - name: volume-{{ .Release.Name | lower }}-kubeconfigs
+        projected:
+          sources:
+      {{- range $k, $v := .Values.kubeconfigs }}      
+          - secret:
+              name: {{ (required "missing 'secret' attribute in value under kubeconfigs, e.g.--set kubeconfigs.account1.secret=mySecret" $v.secret) | lower }}
+      {{- end }}
+      {{- end }}
