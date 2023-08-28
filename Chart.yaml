@@ -2,6 +2,6 @@ apiVersion: v2
 appVersion: 1.0.9
 description: Armory agent for Kubernetes, monitors kuberentes cluster and executes
   operations to it, chart supports full configuration options
-name: agent-k8s-full
+name: agent-k8s-full 
 type: application
 version: 1.0.9
