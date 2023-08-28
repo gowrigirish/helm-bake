@@ -1,4 +1,4 @@
-image:
+image: 
   repository: armory/agent-k8s
   imagePullPolicy: IfNotPresent 
   imagePullSecrets: ""          
