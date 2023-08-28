@@ -5,5 +5,5 @@ image:
 config:
   kubernetes: 
     accounts: 
-      - name: account1  
+      - name: account1 
 env: []
