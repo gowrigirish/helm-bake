@@ -3,7 +3,7 @@ image:
   imagePullPolicy: IfNotPresent 
   imagePullSecrets: ""           
 config:
-  kubernetes:
+  kubernetes: 
     accounts: 
       - name: account1  
 env: []
